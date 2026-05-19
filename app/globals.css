@@ -1,0 +1,124 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sky-mono: "Courier New", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+  background: #050505;
+}
+
+body {
+  color: #f2eee2;
+  font-family: var(--font-sky-mono);
+  overflow: hidden;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.sky-shell {
+  background: #020202;
+}
+
+.sky-shell::before {
+  content: none;
+}
+
+.sky-shell::after {
+  animation: refresh-flicker 6.5s steps(2, end) infinite;
+  background: rgba(242, 231, 194, 0.03);
+  content: "";
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  position: fixed;
+  z-index: 41;
+}
+
+.dot-text {
+  color: transparent;
+  text-shadow: none;
+  -webkit-text-stroke: 1px rgba(242, 238, 226, 0.52);
+  letter-spacing: 0.08em;
+}
+
+.dot-text::selection,
+.matrix-copy::selection {
+  background: rgba(242, 238, 226, 0.18);
+}
+
+.matrix-copy {
+  text-shadow: none;
+}
+
+.dot-field {
+  background-image: radial-gradient(circle, rgba(242, 238, 226, 0.55) 0 2.5px, transparent 2.8px);
+  background-size: 18px 18px;
+}
+
+.large-led {
+  background-image: radial-gradient(circle, rgba(242, 238, 226, 0.9) 0 4px, transparent 4.4px);
+  background-size: 22px 22px;
+  filter: none;
+}
+
+.border-dots {
+  border-image: radial-gradient(circle, rgba(242, 238, 226, 0.66) 0 2px, transparent 2.5px) 8 / 8px / 0 round;
+  border-style: solid;
+}
+
+@keyframes refresh-flicker {
+  0%, 91%, 100% { opacity: 0; }
+  92% { opacity: 0.16; }
+  93% { opacity: 0.02; }
+  94% { opacity: 0.12; }
+}
+
+@keyframes idle-bloom {
+  0%, 100% { opacity: 0.88; }
+  50% { opacity: 1; }
+}
+
+.ambient-bloom {
+  animation: idle-bloom 7s ease-in-out infinite;
+}
+
+@keyframes matrix-marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes matrix-marquee-reverse {
+  0% { transform: translateX(-50%); }
+  100% { transform: translateX(0); }
+}
+
+@media (max-height: 760px) {
+  .sky-board-grid {
+    gap: 0.65rem;
+  }
+}
+
+@media (max-height: 680px) {
+  .sky-board-grid {
+    gap: 0.45rem;
+    padding: 0.75rem;
+  }
+}
