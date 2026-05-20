@@ -1,6 +1,6 @@
 "use client";
 
-import { Save } from "lucide-react";
+import { ArrowLeft, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { TrackerSettings } from "@/lib/types";
 
@@ -32,14 +32,37 @@ export function readDisplaySettings(): TrackerSettings {
 
 export default function SettingsPanel() {
   const [settings, setSettings] = useState<TrackerSettings>(defaults);
+  const [draft, setDraft] = useState({
+    lat: String(defaults.lat),
+    lon: String(defaults.lon),
+    radiusNm: String(defaults.radiusNm)
+  });
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    setSettings(readSettings());
+    const current = readSettings();
+    setSettings(current);
+    setDraft({
+      lat: String(current.lat),
+      lon: String(current.lon),
+      radiusNm: String(current.radiusNm)
+    });
   }, []);
 
   function save() {
-    window.localStorage.setItem("skytracker.settings.v2", JSON.stringify(settings));
+    const next = {
+      ...settings,
+      lat: parseNumber(draft.lat, defaults.lat),
+      lon: parseNumber(draft.lon, defaults.lon),
+      radiusNm: parseNumber(draft.radiusNm, defaults.radiusNm)
+    };
+    setSettings(next);
+    setDraft({
+      lat: String(next.lat),
+      lon: String(next.lon),
+      radiusNm: String(next.radiusNm)
+    });
+    window.localStorage.setItem("skytracker.settings.v2", JSON.stringify(next));
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1800);
   }
@@ -47,19 +70,23 @@ export default function SettingsPanel() {
   return (
     <main className="sky-shell min-h-screen overflow-y-auto px-5 py-8 text-bone md:px-10">
       <div className="mx-auto max-w-3xl">
-        <a className="matrix-copy text-sm uppercase tracking-[0.35em] text-dim" href="/">
-          SkyTracker
+        <a
+          className="inline-flex items-center gap-3 border border-bone/20 px-4 py-3 text-sm uppercase tracking-[0.22em] text-bone/80 transition hover:border-bone hover:text-bone"
+          href="/"
+        >
+          <ArrowLeft size={18} />
+          Back
         </a>
         <h1 className="dot-text mt-8 text-5xl font-black uppercase md:text-8xl">SETTINGS</h1>
         <div className="mt-10 border border-bone/18 bg-black/70 p-5 md:p-8">
-          <Field label="Latitude" value={settings.lat} onChange={(lat) => setSettings({ ...settings, lat })} />
-          <Field label="Longitude" value={settings.lon} onChange={(lon) => setSettings({ ...settings, lon })} />
+          <Field label="Latitude" value={draft.lat} onChange={(lat) => setDraft({ ...draft, lat })} />
+          <Field label="Longitude" value={draft.lon} onChange={(lon) => setDraft({ ...draft, lon })} />
           <Field
             label="Radius NM"
-            value={settings.radiusNm}
+            value={draft.radiusNm}
             min={5}
             max={120}
-            onChange={(radiusNm) => setSettings({ ...settings, radiusNm })}
+            onChange={(radiusNm) => setDraft({ ...draft, radiusNm })}
           />
           <label className="mt-8 flex items-center justify-between border-t border-bone/14 pt-6 text-xl uppercase tracking-[0.12em]">
             Demo Mode
@@ -91,10 +118,10 @@ function Field({
   onChange
 }: {
   label: string;
-  value: number;
+  value: string;
   min?: number;
   max?: number;
-  onChange: (value: number) => void;
+  onChange: (value: string) => void;
 }) {
   return (
     <label className="mt-6 block border-t border-bone/14 pt-5 text-sm uppercase tracking-[0.32em] text-dim first:mt-0 first:border-t-0 first:pt-0">
@@ -104,10 +131,16 @@ function Field({
         max={max}
         min={min}
         step="0.0001"
-        type="number"
+        inputMode="decimal"
+        type="text"
         value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
+        onChange={(event) => onChange(event.target.value)}
       />
     </label>
   );
+}
+
+function parseNumber(value: string, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }

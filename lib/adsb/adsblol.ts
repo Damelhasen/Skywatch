@@ -1,4 +1,5 @@
 import { calculateBearing, calculateDistance, cardinalDirection } from "@/lib/geo";
+import { airlineBrandFromCallsign } from "@/lib/airlineBranding";
 import type { Aircraft, TrackerSettings } from "@/lib/types";
 
 type AdsbLolAircraft = {
@@ -19,87 +20,84 @@ type AdsbLolResponse = {
   msg?: string;
 };
 
-const AIRLINES: Record<string, { name: string; logo: string }> = {
-  // Canadian passenger and regional carriers commonly visible in Canadian airspace.
-  ACA: { name: "Air Canada", logo: "AC" },
-  ROU: { name: "Air Canada Rouge", logo: "AR" },
-  JZA: { name: "Jazz Aviation", logo: "JZ" },
-  WJA: { name: "WestJet", logo: "WS" },
-  WEN: { name: "WestJet Encore", logo: "WE" },
-  POE: { name: "Porter", logo: "PD" },
-  TSC: { name: "Air Transat", logo: "TS" },
-  FLE: { name: "Flair", logo: "F8" },
-  SWG: { name: "Sunwing", logo: "WG" },
-  AKT: { name: "Canadian North", logo: "5T" },
-  ANT: { name: "Air North", logo: "4N" },
-  PVL: { name: "PAL Airlines", logo: "PB" },
-  CAV: { name: "Calm Air", logo: "MO" },
-  BLS: { name: "Bearskin", logo: "JV" },
-  PSC: { name: "Pascan", logo: "P6" },
-  KFA: { name: "Kelowna Flightcraft", logo: "FK" },
-  MPE: { name: "Canadian North", logo: "5T" },
-  // Frequent cross-border and international operators over Canada.
-  AAL: { name: "American Airlines", logo: "AA" },
-  DAL: { name: "Delta Air Lines", logo: "DL" },
-  UAL: { name: "United Airlines", logo: "UA" },
-  SWA: { name: "Southwest", logo: "WN" },
-  JBU: { name: "JetBlue", logo: "B6" },
-  ASA: { name: "Alaska Airlines", logo: "AS" },
-  FFT: { name: "Frontier", logo: "F9" },
-  BAW: { name: "British Airways", logo: "BA" },
-  AFR: { name: "Air France", logo: "AF" },
-  DLH: { name: "Lufthansa", logo: "LH" },
-  KLM: { name: "KLM", logo: "KL" },
-  UAE: { name: "Emirates", logo: "EK" },
-  QTR: { name: "Qatar Airways", logo: "QR" },
-  THY: { name: "Turkish", logo: "TK" },
-  CPA: { name: "Cathay Pacific", logo: "CX" },
-  ANA: { name: "All Nippon", logo: "NH" },
-  JAL: { name: "Japan Airlines", logo: "JL" },
-  KAL: { name: "Korean Air", logo: "KE" },
-  ICE: { name: "Icelandair", logo: "FI" },
-  FIN: { name: "Finnair", logo: "AY" }
+type AdsbDbRouteResponse = {
+  response?: {
+    flightroute?: {
+      origin?: {
+        icao_code?: string;
+      };
+      destination?: {
+        icao_code?: string;
+      };
+    };
+  };
 };
+
+type FlightRoute = {
+  departure: string;
+  destination: string;
+};
+
+const routeCache = new Map<string, { route: FlightRoute | null; expiresAt: number }>();
+const ROUTE_CACHE_MS = 6 * 60 * 60 * 1000;
+const ROUTE_MISS_CACHE_MS = 30 * 60 * 1000;
+const MAX_ROUTE_LOOKUPS = 40;
 
 function normalizeCallsign(value?: string) {
   return value?.trim().replace(/\s+/g, "") || "UNKNOWN";
 }
 
 function airlineFromCallsign(callsign: string) {
-  const code = callsign.slice(0, 3).toUpperCase();
-  return {
-    code,
-    name: AIRLINES[code]?.name ?? "Tracked Aircraft",
-    logo: AIRLINES[code]?.logo ?? code.slice(0, 2)
-  };
+  const brand = airlineBrandFromCallsign(callsign);
+  return { code: brand.code, name: brand.name, logo: brand.logo };
 }
 
-function routeFromCallsign(callsign: string) {
-  const routes: Record<string, [string, string]> = {
-    ACA: ["CYYZ", "CYUL"],
-    ROU: ["CYYZ", "CUN"],
-    JZA: ["CYUL", "CYQB"],
-    AAL: ["KORD", "KLGA"],
-    DAL: ["KDTW", "KJFK"],
-    UAL: ["KEWR", "KORD"],
-    WJA: ["CYYC", "CYYZ"],
-    WEN: ["CYYC", "CYXE"],
-    POE: ["CYTZ", "CYOW"],
-    TSC: ["CYYZ", "LPPT"],
-    FLE: ["CYYZ", "CYVR"],
-    SWG: ["CYYZ", "MMUN"],
-    AKT: ["CYOW", "CYFB"],
-    ANT: ["CYVR", "CYXY"],
-    PVL: ["CYYT", "CYHZ"],
-    CAV: ["CYWG", "CYTH"],
-    BLS: ["CYQT", "CYTS"],
-    BAW: ["EGLL", "CYYZ"],
-    AFR: ["LFPG", "CYYZ"],
-    DLH: ["EDDF", "CYYZ"],
-    SWA: ["KBWI", "KMDW"],
-    JBU: ["KJFK", "KBOS"]
-  };
-  return routes[callsign.slice(0, 3).toUpperCase()];
+function isCommercialCallsign(callsign: string) {
+  return /^[A-Z]{3}\d+[A-Z]?$/.test(callsign);
+}
+
+async function fetchRouteForCallsign(callsign: string): Promise<FlightRoute | null> {
+  if (!isCommercialCallsign(callsign)) {
+    return null;
+  }
+
+  const cached = routeCache.get(callsign);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.route;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2500);
+  const baseUrl = process.env.ADSBDB_BASE_URL ?? "https://api.adsbdb.com/v0";
+
+  try {
+    const response = await fetch(`${baseUrl}/callsign/${encodeURIComponent(callsign)}`, {
+      headers: { accept: "application/json" },
+      signal: controller.signal,
+      next: { revalidate: 60 * 60 }
+    });
+
+    if (!response.ok) {
+      routeCache.set(callsign, { route: null, expiresAt: Date.now() + ROUTE_MISS_CACHE_MS });
+      return null;
+    }
+
+    const payload = (await response.json()) as AdsbDbRouteResponse;
+    const departure = payload.response?.flightroute?.origin?.icao_code?.trim().toUpperCase();
+    const destination = payload.response?.flightroute?.destination?.icao_code?.trim().toUpperCase();
+    const route = departure && destination ? { departure, destination } : null;
+
+    routeCache.set(callsign, {
+      route,
+      expiresAt: Date.now() + (route ? ROUTE_CACHE_MS : ROUTE_MISS_CACHE_MS)
+    });
+
+    return route;
+  } catch {
+    return cached?.route ?? null;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function mapAircraft(raw: AdsbLolAircraft, settings: TrackerSettings): Aircraft | null {
@@ -111,7 +109,6 @@ function mapAircraft(raw: AdsbLolAircraft, settings: TrackerSettings): Aircraft 
   const airline = airlineFromCallsign(callsign);
   const distanceNm = calculateDistance(settings.lat, settings.lon, raw.lat, raw.lon);
   const bearingDeg = calculateBearing(settings.lat, settings.lon, raw.lat, raw.lon);
-  const route = routeFromCallsign(callsign);
 
   return {
     id: raw.hex ?? callsign,
@@ -120,8 +117,6 @@ function mapAircraft(raw: AdsbLolAircraft, settings: TrackerSettings): Aircraft 
     airlineName: airline.name,
     airlineCode: airline.code,
     logoText: airline.logo,
-    departure: route?.[0],
-    destination: route?.[1],
     aircraftType: raw.t || "TYPE UNK",
     lat: raw.lat,
     lon: raw.lon,
@@ -131,9 +126,26 @@ function mapAircraft(raw: AdsbLolAircraft, settings: TrackerSettings): Aircraft 
     distanceNm,
     bearingDeg,
     direction: cardinalDirection(bearingDeg),
-    routeMissing: !route,
+    routeMissing: true,
     lastSeen: new Date(Date.now() - (raw.seen ?? 0) * 1000).toISOString()
   };
+}
+
+async function enrichRoutes(aircraft: Aircraft[]) {
+  const routeCandidates = [...aircraft]
+    .filter((candidate) => isCommercialCallsign(candidate.callsign))
+    .sort((a, b) => (a.distanceNm ?? Infinity) - (b.distanceNm ?? Infinity))
+    .slice(0, MAX_ROUTE_LOOKUPS);
+
+  await Promise.all(
+    routeCandidates.map(async (candidate) => {
+      const route = await fetchRouteForCallsign(candidate.callsign);
+      if (!route) return;
+      candidate.departure = route.departure;
+      candidate.destination = route.destination;
+      candidate.routeMissing = false;
+    })
+  );
 }
 
 export async function fetchNearbyAircraft(settings: TrackerSettings): Promise<Aircraft[]> {
@@ -153,10 +165,13 @@ export async function fetchNearbyAircraft(settings: TrackerSettings): Promise<Ai
   }
 
   const payload = (await response.json()) as AdsbLolResponse;
-  return (payload.ac ?? [])
+  const aircraft = (payload.ac ?? [])
     .map((aircraft) => mapAircraft(aircraft, settings))
     .filter((aircraft): aircraft is Aircraft => aircraft !== null)
     .filter((aircraft) => (aircraft.distanceNm ?? Infinity) <= settings.radiusNm);
+
+  await enrichRoutes(aircraft);
+  return aircraft;
 }
 
 export function getDemoAircraft(settings: TrackerSettings): Aircraft[] {

@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import type { ReactNode } from "react";
 import DotMatrixText, { DotMatrixMarquee } from "@/components/DotMatrixText";
 import PlaneAnimation from "@/components/PlaneAnimation";
+import { airlineBrandFromCallsign, AIRLINE_BRANDS } from "@/lib/airlineBranding";
 import { airportPlaceLabel } from "@/lib/airports";
 import type { Aircraft, DisplayState } from "@/lib/types";
 
@@ -73,70 +74,9 @@ function headingWord(heading: number) {
   return "N";
 }
 
-const MARKS: Record<string, { colors: string[]; pattern: string[] }> = {
-  ACA: {
-    colors: ["#F01428", "#F2E7C2"],
-    pattern: ["0011100", "0111110", "1101011", "1111111", "0111110", "0011100", "0001000"]
-  },
-  ROU: {
-    colors: ["#B0163A", "#F01428", "#F2E7C2"],
-    pattern: ["1110001", "1110011", "0010110", "0011100", "0110100", "1100111", "1000111"]
-  },
-  WJA: {
-    colors: ["#006F8F", "#00A6A3", "#7AC143"],
-    pattern: ["1100011", "1100011", "0110110", "0111110", "0011100", "0011100", "0001000"]
-  },
-  WEN: {
-    colors: ["#006F8F", "#00A6A3", "#7AC143"],
-    pattern: ["1000001", "1100011", "0110110", "0011100", "0110110", "1100011", "1000001"]
-  },
-  POE: {
-    colors: ["#0B1F33", "#BFA46A", "#F2E7C2"],
-    pattern: ["0011100", "0111110", "1100011", "1100011", "0111110", "0011100", "0001000"]
-  },
-  TSC: {
-    colors: ["#00B3F0", "#004B8D", "#F2E7C2"],
-    pattern: ["0001000", "0101010", "0011100", "1111111", "0011100", "0101010", "0001000"]
-  },
-  FLE: {
-    colors: ["#79BE20", "#4B2E83", "#F2E7C2"],
-    pattern: ["1111111", "1000000", "1111100", "1000000", "1000000", "1000000", "1000000"]
-  },
-  SWG: {
-    colors: ["#F6A800", "#E74B3C", "#F2E7C2"],
-    pattern: ["0011100", "0111110", "1110111", "1100011", "1110111", "0111110", "0011100"]
-  },
-  AAL: {
-    colors: ["#C8102E", "#0078D2", "#F2E7C2"],
-    pattern: ["1000001", "1100011", "0110110", "0011100", "0110110", "1100011", "1000001"]
-  },
-  DAL: {
-    colors: ["#C8102E", "#003A70", "#F2E7C2"],
-    pattern: ["0001000", "0011100", "0111110", "1111111", "0011100", "0011100", "0011100"]
-  },
-  UAL: {
-    colors: ["#005DAA", "#00A1DE", "#F2E7C2"],
-    pattern: ["1111111", "1001001", "1111111", "1001001", "1111111", "1001001", "1111111"]
-  },
-  BAW: {
-    colors: ["#2E5C99", "#D71920", "#F2E7C2"],
-    pattern: ["1000000", "1110000", "0111100", "0011111", "0001110", "0000110", "0000010"]
-  },
-  AFR: {
-    colors: ["#002157", "#ED2939", "#F2E7C2"],
-    pattern: ["1000100", "1001100", "1011100", "1111100", "1011100", "1001100", "1000100"]
-  },
-  DLH: {
-    colors: ["#05164D", "#FFCC00", "#F2E7C2"],
-    pattern: ["0011110", "0110000", "1100110", "1101100", "1100000", "0110000", "0011110"]
-  }
-};
-
 function AirlineMark({ code, label }: { code?: string; label: string }) {
-  const mark = MARKS[code ?? ""] ?? {
-    colors: ["#F2E7C2", "#8C877A", "#F2E7C2"],
-    pattern: ["1111111", "1000001", "1011101", "1010101", "1011101", "1000001", "1111111"]
-  };
+  const mark = AIRLINE_BRANDS[code ?? ""] ?? airlineBrandFromCallsign(code ?? label);
+  const pattern = mark.pattern ?? airlineBrandFromCallsign(code ?? label).pattern ?? [];
 
   return (
     <div className="grid h-16 w-16 shrink-0 place-items-center rounded-full border border-bone/10 sm:h-20 sm:w-20 md:h-24 md:w-24 xl:h-32 xl:w-32" aria-label={label}>
@@ -144,7 +84,7 @@ function AirlineMark({ code, label }: { code?: string; label: string }) {
         className="grid"
         style={{ gridTemplateColumns: "repeat(7, min(8px, 1.1vmin))", gridAutoRows: "min(8px, 1.1vmin)", gap: "min(5px, .68vmin)" }}
       >
-        {mark.pattern.flatMap((row, rowIndex) =>
+        {pattern.flatMap((row, rowIndex) =>
           row.split("").flatMap((cell, columnIndex) => {
             if (cell !== "1") return [];
             const color = mark.colors[(rowIndex + columnIndex) % mark.colors.length];

@@ -11,11 +11,9 @@ function numberParam(request: NextRequest, key: string, fallback: number) {
 }
 
 export async function GET(request: NextRequest) {
-  const fixedLat = Number(process.env.SKYTRACKER_DEFAULT_LAT ?? 42.77361);
-  const fixedLon = Number(process.env.SKYTRACKER_DEFAULT_LON ?? -81.18038);
   const settings: TrackerSettings = {
-    lat: fixedLat,
-    lon: fixedLon,
+    lat: numberParam(request, "lat", Number(process.env.SKYTRACKER_DEFAULT_LAT ?? 42.77361)),
+    lon: numberParam(request, "lon", Number(process.env.SKYTRACKER_DEFAULT_LON ?? -81.18038)),
     radiusNm: numberParam(request, "radiusNm", Number(process.env.SKYTRACKER_DEFAULT_RADIUS_NM ?? 35)),
     demoMode:
       request.nextUrl.searchParams.get("demo") === "true" ||
