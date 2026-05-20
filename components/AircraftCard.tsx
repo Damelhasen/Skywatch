@@ -41,9 +41,9 @@ export default function AircraftCard({ aircraft, candidates, state }: AircraftCa
       <DotRule />
 
       <div className="grid min-h-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-0">
-        <RouteBlock align="left" code={from} label={airportPlaceLabel(from)} />
+        <RouteBlock align="left" code={from} label={aircraft?.departureLabel ?? airportPlaceLabel(from)} />
         <PlaneAnimation aircraft={aircraft} clear={clear} />
-        <RouteBlock align="right" code={to} label={airportPlaceLabel(to)} />
+        <RouteBlock align="right" code={to} label={aircraft?.destinationLabel ?? airportPlaceLabel(to)} />
       </div>
 
       <DotRule />

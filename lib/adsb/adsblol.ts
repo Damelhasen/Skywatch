@@ -25,9 +25,13 @@ type AdsbDbRouteResponse = {
     flightroute?: {
       origin?: {
         icao_code?: string;
+        municipality?: string;
+        country_name?: string;
       };
       destination?: {
         icao_code?: string;
+        municipality?: string;
+        country_name?: string;
       };
     };
   };
@@ -35,7 +39,9 @@ type AdsbDbRouteResponse = {
 
 type FlightRoute = {
   departure: string;
+  departureLabel?: string;
   destination: string;
+  destinationLabel?: string;
 };
 
 const routeCache = new Map<string, { route: FlightRoute | null; expiresAt: number }>();
@@ -54,6 +60,19 @@ function airlineFromCallsign(callsign: string) {
 
 function isCommercialCallsign(callsign: string) {
   return /^[A-Z]{3}\d+[A-Z]?$/.test(callsign);
+}
+
+function airportLabel(airport?: { municipality?: string; country_name?: string }) {
+  const city = airport?.municipality?.trim();
+  const country = airport?.country_name?.trim();
+  if (!city || !country) return undefined;
+  const normalizedCountry =
+    country.toLowerCase() === "united states"
+      ? "USA"
+      : country.toLowerCase() === "united kingdom"
+        ? "UK"
+        : country.toUpperCase();
+  return `${city} ${normalizedCountry}`.toUpperCase();
 }
 
 async function fetchRouteForCallsign(callsign: string): Promise<FlightRoute | null> {
@@ -83,9 +102,19 @@ async function fetchRouteForCallsign(callsign: string): Promise<FlightRoute | nu
     }
 
     const payload = (await response.json()) as AdsbDbRouteResponse;
-    const departure = payload.response?.flightroute?.origin?.icao_code?.trim().toUpperCase();
-    const destination = payload.response?.flightroute?.destination?.icao_code?.trim().toUpperCase();
-    const route = departure && destination ? { departure, destination } : null;
+    const origin = payload.response?.flightroute?.origin;
+    const arrival = payload.response?.flightroute?.destination;
+    const departure = origin?.icao_code?.trim().toUpperCase();
+    const destination = arrival?.icao_code?.trim().toUpperCase();
+    const route =
+      departure && destination
+        ? {
+            departure,
+            departureLabel: airportLabel(origin),
+            destination,
+            destinationLabel: airportLabel(arrival)
+          }
+        : null;
 
     routeCache.set(callsign, {
       route,
@@ -142,7 +171,9 @@ async function enrichRoutes(aircraft: Aircraft[]) {
       const route = await fetchRouteForCallsign(candidate.callsign);
       if (!route) return;
       candidate.departure = route.departure;
+      candidate.departureLabel = route.departureLabel;
       candidate.destination = route.destination;
+      candidate.destinationLabel = route.destinationLabel;
       candidate.routeMissing = false;
     })
   );
@@ -192,7 +223,9 @@ export function getDemoAircraft(settings: TrackerSettings): Aircraft[] {
       airlineCode: "ACA",
       logoText: "AC",
       departure: "CYYZ",
+      departureLabel: "TORONTO CANADA",
       destination: "KLGA",
+      destinationLabel: "NEW YORK USA",
       aircraftType: "A220-300",
       lat: nearLat,
       lon: nearLon,
@@ -209,7 +242,9 @@ export function getDemoAircraft(settings: TrackerSettings): Aircraft[] {
       airlineCode: "WJA",
       logoText: "WS",
       departure: "CYUL",
+      departureLabel: "MONTREAL CANADA",
       destination: "CYYZ",
+      destinationLabel: "TORONTO CANADA",
       aircraftType: "B737 MAX 8",
       lat: farLat,
       lon: farLon,

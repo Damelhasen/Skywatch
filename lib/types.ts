@@ -8,7 +8,9 @@ export type Aircraft = {
   airlineCode: string;
   logoText: string;
   departure?: string;
+  departureLabel?: string;
   destination?: string;
+  destinationLabel?: string;
   aircraftType?: string;
   lat: number;
   lon: number;
